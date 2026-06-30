@@ -36,7 +36,7 @@ try:
     genai.configure(api_key=GOOGLE_API_KEY)
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    MODELO_AGENTE = "gemini-1.5-flash" 
+    MODELO_AGENTE = "gemini-1.5-flash"
     CICLO_ANALISIS = 300 
 
     log_visual("🔗", "CONEXION", "Conectado a Supabase y Gemini.")
