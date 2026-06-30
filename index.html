@@ -1,75 +1,43 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>La Masa Dorada - Inventario</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
-<body class="bg-amber-50 min-h-screen p-8">
+<script>
+    // Variable con nombre distinto para no chocar con la librería
+    let sbClient; 
 
-    <div class="max-w-md mx-auto bg-white rounded-xl shadow-md p-6 border border-amber-200">
-        <h1 class="text-2xl font-bold text-amber-800 text-center mb-6">🍞 La Masa Dorada</h1>
-        
-        <form id="formularioPanaderia" class="space-y-4">
-            <input type="text" id="nombre" required placeholder="Nombre del producto" class="w-full p-2 border rounded">
-            <input type="number" id="precio" required placeholder="Precio" class="w-full p-2 border rounded">
-            <input type="number" id="stock" required placeholder="Stock inicial" class="w-full p-2 border rounded">
-            <select id="categoria" class="w-full p-2 border rounded">
-                <option value="pan_dulce">Pan Dulce</option>
-                <option value="pan_salado">Pan Salado</option>
-            </select>
-            <button type="submit" class="w-full bg-amber-600 text-white p-2 rounded font-bold hover:bg-amber-700">
-                Guardar Producto
-            </button>
-        </form>
-        <div id="mensaje" class="mt-4 text-center font-bold"></div>
-    </div>
-
-    <script>
-        let supabase;
-
-        // Función para obtener variables desde el servidor Python en Render
-        async function conectarSupabase() {
-            try {
-                const response = await fetch('/config');
-                const config = await response.json();
-                
-                // Inicializa Supabase con las variables recibidas
-                supabase = supabase.createClient(config.url, config.key);
-                document.getElementById('mensaje').textContent = "✅ Conectado a la base de datos";
-                document.getElementById('mensaje').classList.add('text-green-600');
-            } catch (error) {
-                document.getElementById('mensaje').textContent = "❌ Error al conectar con el servidor";
-                document.getElementById('mensaje').classList.add('text-red-600');
-            }
+    async function conectarSupabase() {
+        try {
+            // 1. Pedimos las llaves al servidor
+            const response = await fetch('/config');
+            const config = await response.json();
+            
+            // 2. Inicializamos usando la librería 'supabase' (global) 
+            // y guardamos la instancia en 'sbClient'
+            sbClient = supabase.createClient(config.url, config.key);
+            
+            document.getElementById('status').textContent = "✅ Conectado a Supabase";
+            document.getElementById('status').className = "mt-4 text-center text-green-600";
+        } catch (error) {
+            console.error("Error:", error);
+            document.getElementById('status').textContent = "❌ Error al conectar";
         }
+    }
 
-        // Lógica de envío
-        document.getElementById('formularioPanaderia').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!supabase) return alert("Esperando conexión...");
+    document.getElementById('formPan').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        // Usamos 'sbClient' aquí abajo
+        if (!sbClient) return alert("Conectando...");
 
-            const datos = {
-                nombre: document.getElementById('nombre').value,
-                precio: parseFloat(document.getElementById('precio').value),
-                stock: parseInt(document.getElementById('stock').value),
-                categoria: document.getElementById('categoria').value
-            };
+        const { error } = await sbClient.from('productos_panaderia').insert([{
+            nombre: document.getElementById('nombre').value,
+            precio: document.getElementById('precio').value
+        }]);
 
-            const { error } = await supabase.from('productos_panaderia').insert([datos]);
+        if (error) {
+            alert("Error: " + error.message);
+        } else {
+            alert("¡Guardado!");
+            document.getElementById('formPan').reset();
+        }
+    });
 
-            if (error) {
-                document.getElementById('mensaje').textContent = "❌ Error: " + error.message;
-            } else {
-                document.getElementById('mensaje').textContent = "✅ Producto guardado!";
-                document.getElementById('formularioPanaderia').reset();
-            }
-        });
-
-        // Conectar al cargar
-        conectarSupabase();
-    </script>
-</body>
-</html>
+    conectarSupabase();
+</script>
