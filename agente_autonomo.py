@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 
 # ==============================================================================
-# 1. CONFIGURACIÓN DEL ENTORNO (Render -> API Keys)
+# 1. CONFIGURACIÓN DEL ENTORNO
 # ==============================================================================
 sys.stdout.reconfigure(line_buffering=True)
 
@@ -19,7 +19,6 @@ def log_visual(emoji, estado, mensaje):
 
 print("\n" + "="*60)
 log_visual("⚠️", "INIT", "AGENTE AUTÓNOMO V1: ADMINISTRADOR DE USUARIOS")
-log_visual("⏳", "CONFIG", "Ciclo de ejecución autónoma configurado a 5 minutos (300s)")
 print("="*60 + "\n")
 
 try:
@@ -30,124 +29,79 @@ try:
     SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
     if not all([GOOGLE_API_KEY, SUPABASE_URL, SUPABASE_KEY]):
-        log_visual("🔥", "ERROR", "Faltan credenciales críticas en el entorno.")
+        log_visual("🔥", "ERROR", "Faltan credenciales críticas.")
         sys.exit(1)
 
     genai.configure(api_key=GOOGLE_API_KEY)
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    MODELO_AGENTE = "gemini-1.5-flash-001"
+    # Configuración simplificada para evitar error 404
+    model = genai.GenerativeModel("gemini-1.5-flash")
     CICLO_ANALISIS = 300 
 
     log_visual("🔗", "CONEXION", "Conectado a Supabase y Gemini.")
 
-    def limpiar_json(texto):
-        texto = texto.strip()
-        if texto.startswith("```json"):
-            texto = texto[7:]
-        elif texto.startswith("```"):
-            texto = texto[3:]
-        if texto.endswith("```"):
-            texto = texto[:-3]
-        return texto.strip()
-
     def escanear_base_de_datos():
-        tabla_objetivo = 'datos_prueba' 
         try:
-            respuesta = supabase.table(tabla_objetivo).select('*').limit(10).execute()
-            return respuesta.data, tabla_objetivo
+            respuesta = supabase.table('datos_prueba').select('*').limit(10).execute()
+            return respuesta.data
         except Exception as e:
             log_visual("⚠️", "READ_ERR", f"Error leyendo base de datos: {e}")
-            return None, tabla_objetivo
+            return None
 
     def ejecutar_orden_ia(ordenes_json):
         if not ordenes_json or "acciones" not in ordenes_json: 
             return
 
         for accion in ordenes_json["acciones"]:
-            tipo = accion.get("tipo")
-            tabla = accion.get("tabla")
-            id_objetivo = accion.get("id_objetivo")
-            justificacion = accion.get("justificacion")
-
             try:
-                if tipo == "ELIMINAR" and id_objetivo:
-                    supabase.table(tabla).delete().eq('id', id_objetivo).execute()
-                    log_visual("🗑️", "EXEC_DEL", f"ID {id_objetivo} eliminado. Motivo: {justificacion}")
-                
-                elif tipo == "MODIFICAR" and id_objetivo:
+                tipo = accion.get("tipo")
+                id_objetivo = accion.get("id_objetivo")
+                if tipo == "MODIFICAR" and id_objetivo:
                     nuevos_datos = accion.get("nuevos_datos", {})
-                    supabase.table(tabla).update(nuevos_datos).eq('id', id_objetivo).execute()
-                    log_visual("✏️", "EXEC_UPD", f"ID {id_objetivo} modificado. Motivo: {justificacion}")
-                    
+                    supabase.table("datos_prueba").update(nuevos_datos).eq('id', id_objetivo).execute()
+                    log_visual("✏️", "EXEC_UPD", f"ID {id_objetivo} actualizado.")
             except Exception as e:
-                log_visual("❌", "EXEC_FAIL", f"Fallo al ejecutar orden: {e}")
+                log_visual("❌", "EXEC_FAIL", f"Error en ejecución: {e}")
 
     # ==============================================================================
-    # 4. CEREBRO ESTRATÉGICO (Administrador de Usuarios)
+    # 2. CEREBRO ESTRATÉGICO
     # ==============================================================================
-    instruccion_peligrosa = """
-    Eres un Administrador de Usuarios Autónomo. Tu objetivo es mantener la integridad de la tabla de usuarios.
-    Analiza la columna 'estado_cuenta', 'ultima_actividad' y 'rol'. 
-    
-    Reglas de decisión:
-    1. Si 'estado_cuenta' es 'pendiente' y la 'ultima_actividad' es reciente (2026-06), cambia 'estado_cuenta' a 'activo' usando MODIFICAR.
-    2. Si la 'ultima_actividad' es anterior a 2026-01-01, cambia 'estado_cuenta' a 'bloqueado' usando MODIFICAR.
-    3. Si el rol es 'admin' y no tiene actividad en 2026, cambia 'estado_cuenta' a 'bloqueado' usando MODIFICAR.
-    
-    Responde ÚNICAMENTE con un JSON con este formato exacto:
-    {
-        "analisis_general": "Evaluación de usuarios",
-        "acciones": [
-            {
-                "tipo": "MODIFICAR", 
-                "tabla": "datos_prueba",
-                "id_objetivo": 1,
-                "justificacion": "Razón del cambio",
-                "nuevos_datos": {"estado_cuenta": "activo"}
-            }
-        ]
-    }
-    """
+    def procesar_con_ia(datos):
+        prompt = f"""
+        Eres un administrador de usuarios. Analiza estos datos: {json.dumps(datos)}.
+        Reglas:
+        1. Si 'estado_cuenta' es 'pendiente' y 'ultima_actividad' es de junio 2026, cambia 'estado_cuenta' a 'activo'.
+        2. Si 'ultima_actividad' es anterior a 2026-01-01, cambia 'estado_cuenta' a 'bloqueado'.
+        
+        Responde SOLO con un JSON válido, sin formato markdown:
+        {{
+            "analisis_general": "Evaluación realizada",
+            "acciones": [
+                {{"tipo": "MODIFICAR", "id_objetivo": 1, "nuevos_datos": {{"estado_cuenta": "activo"}}}}
+            ]
+        }}
+        """
+        response = model.generate_content(prompt)
+        return json.loads(response.text.strip())
 
-    model = genai.GenerativeModel(
-        model_name=MODELO_AGENTE,
-        generation_config={"response_mime_type": "application/json", "temperature": 0.7},
-        system_instruction=instruccion_peligrosa
-    )
-
+    # ==============================================================================
+    # 3. BUCLE DE AUTONOMÍA
+    # ==============================================================================
     def ciclo_autonomo():
-        log_visual("⚡", "START", "Iniciando escaneo autónomo...")
-        datos_actuales, nombre_tabla = escanear_base_de_datos()
+        log_visual("⚡", "START", "Iniciando ciclo...")
+        datos = escanear_base_de_datos()
         
-        if not datos_actuales:
-            log_visual("💤", "SKIP", "No hay datos para analizar.")
-            return
+        if datos:
+            log_visual("🧠", "THINK", "Consultando a Gemini...")
+            ordenes = procesar_con_ia(datos)
+            ejecutar_orden_ia(ordenes)
+        
+        log_visual("💤", "WAIT", f"Reposo ({CICLO_ANALISIS}s)...")
 
-        log_visual("🧠", "THINK", "Evaluando usuarios con Gemini...")
-        
-        prompt_contexto = f"Estado actual de la tabla '{nombre_tabla}': {json.dumps(datos_actuales, indent=2)}"
-        
-        try:
-            response = model.generate_content(prompt_contexto)
-            if response.text:
-                ordenes = json.loads(limpiar_json(response.text))
-                log_visual("🤖", "DECISION", ordenes.get("analisis_general", "Evaluación completada."))
-                ejecutar_orden_ia(ordenes)
-        except Exception as e:
-            log_visual("🔥", "AI_ERROR", f"Error en procesamiento: {e}")
-
-    def bucle_infinito():
+    while True:
         ciclo_autonomo()
-        while True:
-            log_visual("💤", "WAIT", f"Agente en reposo ({CICLO_ANALISIS}s)...")
-            time.sleep(CICLO_ANALISIS)
-            ciclo_autonomo()
-
-    if __name__ == "__main__":
-        bucle_infinito()
+        time.sleep(CICLO_ANALISIS)
 
 except Exception as e:
-    log_visual("💀", "FATAL", f"Error irrecuperable: {e}")
-    traceback.print_exc()
-    sys.exit(1)
+    log_visual("💀", "FATAL", f"Error: {e}")
