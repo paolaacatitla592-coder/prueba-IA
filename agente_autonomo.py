@@ -3,6 +3,8 @@ import os
 import time
 import traceback
 import json
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import google.generativeai as genai
 from datetime import datetime
 from dotenv import load_dotenv
@@ -35,7 +37,7 @@ try:
     genai.configure(api_key=GOOGLE_API_KEY)
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    # Configuración simplificada para evitar error 404
+    # Configuración simplificada
     model = genai.GenerativeModel("gemini-1.5-flash")
     CICLO_ANALISIS = 300 
 
@@ -99,6 +101,26 @@ try:
         
         log_visual("💤", "WAIT", f"Reposo ({CICLO_ANALISIS}s)...")
 
+    # ==============================================================================
+    # 4. SERVIDOR FALSO PARA ENGAÑAR A RENDER
+    # ==============================================================================
+    class ServidorFalso(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b"El Agente Autonomo esta funcionando correctamente.")
+
+    def mantener_vivo():
+        puerto = int(os.environ.get("PORT", 10000))
+        server = HTTPServer(('0.0.0.0', puerto), ServidorFalso)
+        log_visual("🌐", "WEB", f"Servidor falso abierto en el puerto {puerto} para Render")
+        server.serve_forever()
+
+    # Iniciamos el servidor en segundo plano
+    threading.Thread(target=mantener_vivo, daemon=True).start()
+
+    # Iniciamos el ciclo infinito del agente
     while True:
         ciclo_autonomo()
         time.sleep(CICLO_ANALISIS)
