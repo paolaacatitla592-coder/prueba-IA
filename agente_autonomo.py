@@ -39,8 +39,8 @@ try:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
     # SOLUCIÓN AL ERROR 404: Usamos el modelo clásico y estable
-    model = genai.GenerativeModel("gemini-pro")
-    CICLO_ANALISIS = 300 
+  model = genai.GenerativeModel("gemini-2.5-flash")
+    CICLO_ANALISIS = 300
 
     log_visual("🔗", "CONEXION", "Conectado a Supabase y Gemini.")
 
