@@ -7,56 +7,70 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-amber-50 p-8">
-    <div class="max-w-md mx-auto bg-white p-6 rounded-xl shadow-md">
+    <div class="max-w-md mx-auto bg-white p-6 rounded-xl shadow-md border border-amber-200">
         <h1 class="text-2xl font-bold text-center text-amber-800 mb-4">🍞 La Masa Dorada</h1>
+        
         <form id="formPan" class="space-y-3">
             <input type="text" id="nombre" placeholder="Nombre producto" required class="w-full p-2 border rounded">
             <input type="number" id="precio" placeholder="Precio" required class="w-full p-2 border rounded">
-            <button type="submit" class="w-full bg-amber-600 text-white p-2 rounded font-bold">Guardar</button>
+            <button type="submit" class="w-full bg-amber-600 text-white p-2 rounded font-bold hover:bg-amber-700 transition">Guardar</button>
         </form>
-        <div id="status" class="mt-4 text-center font-bold">Cargando conexión...</div>
+        
+        <div id="status" class="mt-4 text-center font-bold text-gray-600">Conectando con el servidor...</div>
     </div>
+
 <script>
-    // Variable con nombre distinto para no chocar con la librería
+    // Variable global para usarla en todo el script
     let sbClient; 
 
     async function conectarSupabase() {
+        // --- AQUÍ DEBES PONER TU URL REAL DE RENDER ---
+        const RENDER_URL = 'https://prueba-ia-08fo.onrender.com'; 
+        
         try {
-            // 1. Pedimos las llaves al servidor
-            const response = await fetch('/config');
+            // 1. Pedimos las llaves a tu servidor de Render
+            const response = await fetch(`${RENDER_URL}/config`);
+            
+            if (!response.ok) {
+                throw new Error("No se pudo contactar al servidor en Render");
+            }
+            
             const config = await response.json();
             
-            // 2. Inicializamos usando la librería 'supabase' (global) 
-            // y guardamos la instancia en 'sbClient'
+            // 2. Inicializamos la conexión usando la librería global 'supabase'
             sbClient = supabase.createClient(config.url, config.key);
             
             document.getElementById('status').textContent = "✅ Conectado a Supabase";
             document.getElementById('status').className = "mt-4 text-center text-green-600";
+            
         } catch (error) {
-            console.error("Error:", error);
-            document.getElementById('status').textContent = "❌ Error al conectar";
+            console.error("Error de conexión:", error);
+            document.getElementById('status').textContent = "❌ Error: Verifica la URL de Render";
+            document.getElementById('status').className = "mt-4 text-center text-red-600";
         }
     }
 
+    // Manejador del formulario
     document.getElementById('formPan').addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        // Usamos 'sbClient' aquí abajo
-        if (!sbClient) return alert("Conectando...");
+        if (!sbClient) return alert("Esperando conexión con la base de datos...");
 
+        // Enviamos los datos a la tabla 'productos_panaderia'
         const { error } = await sbClient.from('productos_panaderia').insert([{
             nombre: document.getElementById('nombre').value,
-            precio: document.getElementById('precio').value
+            precio: parseFloat(document.getElementById('precio').value)
         }]);
 
         if (error) {
-            alert("Error: " + error.message);
+            alert("Error al guardar: " + error.message);
         } else {
-            alert("¡Guardado!");
+            alert("¡Producto guardado exitosamente!");
             document.getElementById('formPan').reset();
         }
     });
 
+    // Iniciar conexión al cargar la página
     conectarSupabase();
 </script>
 </body>
