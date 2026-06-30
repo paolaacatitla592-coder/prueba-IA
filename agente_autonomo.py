@@ -38,9 +38,9 @@ try:
     genai.configure(api_key=GOOGLE_API_KEY)
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    # SOLUCIÓN AL ERROR 404: Usamos el modelo clásico y estable
-  model = genai.GenerativeModel("gemini-2.5-flash")
-    CICLO_ANALISIS = 300
+    # Configuración del modelo que elegiste
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    CICLO_ANALISIS = 300 
 
     log_visual("🔗", "CONEXION", "Conectado a Supabase y Gemini.")
 
@@ -88,7 +88,6 @@ try:
         
         try:
             response = model.generate_content(prompt)
-            # Limpieza exhaustiva para evitar problemas con la respuesta de gemini-pro
             texto_limpio = response.text.replace('```json', '').replace('```', '').strip()
             return json.loads(texto_limpio)
         except json.JSONDecodeError:
@@ -121,7 +120,7 @@ try:
             self.wfile.write(b"El Agente Autonomo esta funcionando correctamente.")
             
         def log_message(self, format, *args):
-            pass # Para no ensuciar los logs de tu agente
+            pass 
 
     def mantener_vivo():
         puerto = int(os.environ.get("PORT", 10000))
@@ -129,10 +128,8 @@ try:
         log_visual("🌐", "WEB", f"Servidor falso abierto en el puerto {puerto} para Render")
         server.serve_forever()
 
-    # Iniciamos el servidor en segundo plano
     threading.Thread(target=mantener_vivo, daemon=True).start()
 
-    # Iniciamos el ciclo infinito del agente
     while True:
         ciclo_autonomo()
         time.sleep(CICLO_ANALISIS)
