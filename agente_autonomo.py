@@ -26,6 +26,7 @@ print("="*60 + "\n")
 try:
     load_dotenv()
 
+    # Credenciales de Render
     GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
     SUPABASE_URL = os.getenv('SUPABASE_URL')
     SUPABASE_KEY = os.getenv('SUPABASE_KEY')
@@ -37,8 +38,8 @@ try:
     genai.configure(api_key=GOOGLE_API_KEY)
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    # Configuración simplificada
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    # SOLUCIÓN AL ERROR 404: Usamos el modelo clásico y estable
+    model = genai.GenerativeModel("gemini-pro")
     CICLO_ANALISIS = 300 
 
     log_visual("🔗", "CONEXION", "Conectado a Supabase y Gemini.")
@@ -62,7 +63,7 @@ try:
                 if tipo == "MODIFICAR" and id_objetivo:
                     nuevos_datos = accion.get("nuevos_datos", {})
                     supabase.table("datos_prueba").update(nuevos_datos).eq('id', id_objetivo).execute()
-                    log_visual("✏️", "EXEC_UPD", f"ID {id_objetivo} actualizado.")
+                    log_visual("✏️", "EXEC_UPD", f"ID {id_objetivo} actualizado a {nuevos_datos}.")
             except Exception as e:
                 log_visual("❌", "EXEC_FAIL", f"Error en ejecución: {e}")
 
@@ -76,7 +77,7 @@ try:
         1. Si 'estado_cuenta' es 'pendiente' y 'ultima_actividad' es de junio 2026, cambia 'estado_cuenta' a 'activo'.
         2. Si 'ultima_actividad' es anterior a 2026-01-01, cambia 'estado_cuenta' a 'bloqueado'.
         
-        Responde SOLO con un JSON válido, sin formato markdown:
+        Responde SOLO con un objeto JSON estrictamente válido y estructurado exactamente así, sin markdown ni explicaciones adicionales:
         {{
             "analisis_general": "Evaluación realizada",
             "acciones": [
@@ -84,8 +85,15 @@ try:
             ]
         }}
         """
-        response = model.generate_content(prompt)
-        return json.loads(response.text.strip())
+        
+        try:
+            response = model.generate_content(prompt)
+            # Limpieza exhaustiva para evitar problemas con la respuesta de gemini-pro
+            texto_limpio = response.text.replace('```json', '').replace('```', '').strip()
+            return json.loads(texto_limpio)
+        except json.JSONDecodeError:
+            log_visual("⚠️", "PARSE_ERR", "Gemini no devolvió un JSON válido.")
+            return None
 
     # ==============================================================================
     # 3. BUCLE DE AUTONOMÍA
@@ -97,12 +105,13 @@ try:
         if datos:
             log_visual("🧠", "THINK", "Consultando a Gemini...")
             ordenes = procesar_con_ia(datos)
-            ejecutar_orden_ia(ordenes)
+            if ordenes:
+                ejecutar_orden_ia(ordenes)
         
         log_visual("💤", "WAIT", f"Reposo ({CICLO_ANALISIS}s)...")
 
     # ==============================================================================
-    # 4. SERVIDOR FALSO PARA ENGAÑAR A RENDER
+    # 4. SERVIDOR FALSO PARA ENGAÑAR A RENDER (Solución al timeout)
     # ==============================================================================
     class ServidorFalso(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -110,6 +119,9 @@ try:
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
             self.wfile.write(b"El Agente Autonomo esta funcionando correctamente.")
+            
+        def log_message(self, format, *args):
+            pass # Para no ensuciar los logs de tu agente
 
     def mantener_vivo():
         puerto = int(os.environ.get("PORT", 10000))
@@ -127,3 +139,4 @@ try:
 
 except Exception as e:
     log_visual("💀", "FATAL", f"Error: {e}")
+    traceback.print_exc()
